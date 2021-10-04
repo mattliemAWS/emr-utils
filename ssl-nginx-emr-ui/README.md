@@ -4,11 +4,12 @@ EMR configures Encryption In Transit for a number of services running on EMR: ht
 
 However, not all UI's are automatically configured. This solution uses customer provided certificate via EMR security config and configures a nginx proxy to encrypt in transit communication to EMR UIs
 
-This utility  wil re-use existing nginx/httpd conf files that are on the EMR cluster and configure them with SSL. The certificates being used for SSL are taken from the EMR Security Configs that are passed in during cluster provisioning: https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-create-security-configuration.html
+This utility  wil re-use existing nginx/httpd conf files that are on the EMR cluster and configure httpd with SSL on port 19443. The certificates being used for SSL are taken from the EMR Security Configs that are passed in during cluster provisioning: https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-create-security-configuration.html. 
 
 # Usage
-1. Provision EMR cluster with attached BA (emr_EncryptionInTransit_httpdFix_533.sh)
-2. Include EMR Spark configuration
+1. Provision EMR cluster with attached BA (emr_EncryptionInTransit_httpdFix_533.sh). The BA has base64 encoded configuration files of httpd.conf that's existing on the cluster
+
+3. Include EMR Spark configuration
 ```
     [
       {
@@ -20,7 +21,7 @@ This utility  wil re-use existing nginx/httpd conf files that are on the EMR clu
     ]
  ```
 
-3. Setup regular ssh tunneling via foxyproxy/dynamic port forwarding from laptop to EMR master node:
+3. Setup regular ssh tunneling via foxyproxy/dynamic port forwarding from laptop to EMR master node. If using local port forwarding uncomment line #7 and comment #10 instead. 
 
 https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel.html
 
