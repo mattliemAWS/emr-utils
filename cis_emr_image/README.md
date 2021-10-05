@@ -1,41 +1,20 @@
-# emr-utils - ssl-nginx-emr-ui
+# emr-utils - cis-emr-image
 
-EMR configures Encryption In Transit for a number of services running on EMR: https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-data-encryption-options.html. However, not all UI's are automatically configured. This solution uses customer provided certificate via EMR security config and configures a nginx proxy to encrypt in transit communication to EMR UIs
+This utility is an example of how to secure an EMR cluster based off of CIS requirements. By default, EMR uses vanilla EC2 AMI and it's up to the customer to configure the EC2 as per their security requirements. The utility involves 
+1) creating a custom EMR AMI: https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-custom-ami.html
+2) Running bootstrap action during cluster provisioning: https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-bootstrap.html
 
-This utility  wil re-use existing nginx/httpd conf files that are on the EMR cluster and configure them with SSL. The certificates being used for SSL are taken from the EMR Security Configs that are passed in during cluster provisioning: 
+Notes:
+- Some CIS requirements must be applied after the ec2 instance is running which is why the additional bootstrap action is used.
+- Amazon Inspector was used to scan the EMR cluster with CIS Operating System Security Configuration Benchmarks-1.0. 
+- Not all CIS requirements are covered in this utility. There are some that are known to be incompatible with Hadoop e.g SElinux, and others that require user input. e.g how long should user session be active for
+- Finally, (and most importantly) some CIS requirements are not applicable in the context of running on AWS. e.g firewall rules when you have security groups or password rotation requirements when you block SSH access and only interact with the EMR cluster remotely via EMR Steps API (A general best practice)
 
-https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-create-security-configuration.html
+# Usage (Manual):
+1. Provision latest vanilla AL and apply cis_image_creation.sh 
+2. Create image out of latest AMI
+3. Provision EMR cluster with custom ami and include cis_ba.sh
 
-#Usage:
-1. Provision EMR cluster with attached BA (emr_EncryptionInTransit_httpdFix_533.sh)
-2. Include EMR Spark configuration
- 
-[
-  {
-    "classification": "spark-defaults",
-    "Properties": {
-      "spark.ssl.historyServer.enabled": "false"
-    }
-  }
-]
-
-3. Setup regular ssh tunneling via foxyproxy/dynamic port forwarding from laptop to EMR master node:
-
-https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel.html
-
-4. Access UI’s via port 19443:
- 
-URL would be accessed via:
-Spark History Server:  https://<emr_master_node>:19443/shs/
-YARN Job History:      https://<emr_master_node>:19443/jh/
-YARN Resource Manager: https://<emr_master_node>:19443/rm/
-YARN Timeline Server:  https://<emr_master_node>:19443/yts
-Tez UI:                https://<emr_master_node>:19443/tez
-YARN Node Manager:     https://<emr_master_node>:19443/proxy/application_1626201934269_0003/
- 
-#Appedix
-Why ssl enabled = false?
-Spark has built in automatic redirect so that all traffic always goes to its own ssl port :18480. Even if you’re using our nginx proxy on 19443, it redirects you to the spark ui port. Our redirects only occur when accessing 19443 so when accessing spark UI through its default https port, it redirects to the http NM url. I had to disable the redirects by setting the above during cluster provisioning. After this is set to false, the spark ui on 19443 redirects to https NM logs on 19443 – all of which is SSL enforced
- 
-Version Support?
-Tested with EMR 5.33+ and EMR 6.2+
+# Usage (EC2 Image Builder):
+EC2 Image Builder is a fully-managed service that makes it easy to build, customize and deploy OS images without writing scripts.
+1. Run CFN template that will create an imagine pipeline in Image Builder. This will define all aspects of the process to create a CIS image for EMR. It consists of the image recipe, infrastructure configuration, distribution, and test settings.
