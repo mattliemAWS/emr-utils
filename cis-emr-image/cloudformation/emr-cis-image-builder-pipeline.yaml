@@ -6,10 +6,6 @@ Parameters:
     Type: String
     Description: "The base AMI ARN to be used for your Image Recipe to build upon. Defaulted to AL1"
     Default: "ami-09a5b0b7edf08843d"
-  CisScriptS3Uri:
-    Type: String
-    Description: "The URI of the CIS level one scripts for the custom component"
-    Default: "your-bucket-name"
   Description:
     Type: String
     Description: "A general description of your image resources"
@@ -157,7 +153,7 @@ Resources:
                 action: ExecuteBash
                 inputs:
                   commands:
-                    - aws s3 cp s3://${CisScriptS3Uri}/cis_image_creation.sh /tmp/ ; chmod +x /tmp/cis_image_creation.sh ; sudo ./tmp/cis_image_creation.sh
+                    - aws s3 cp s3://<your-bucket>/cis_image_creation.sh /tmp/ ; chmod +x /tmp/cis_image_creation.sh ; sudo ./tmp/cis_image_creation.sh
           - name: validate
             steps:
               - name: HelloWorldStep
