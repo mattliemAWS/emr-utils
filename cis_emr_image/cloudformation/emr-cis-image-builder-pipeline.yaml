@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "EC2 Image Builder Stack - Windows Server 2019"
+
+Parameters:
+  BaseImageArn:
+    Type: String
+    Description: "The base AMI ARN to be used for your Image Recipe to build upon. Defaulted to AL1"
+    Default: "ami-09a5b0b7edf08843d"
+  CisScriptS3Uri:
+    Type: String
+    Description: "The URI of the CIS level one scripts for the custom component"
+    Default: "your-bucket-name"
+  Description:
+    Type: String
+    Description: "A general description of your image resources"
+    Default: "Hardened emr AL1 image"
+  ImageName:
+    Type: String
+    Description: "Desired name of your image resources"
+    Default: "Hardened emr AL1 image"
+  Version:
+    Type: String
+    Description: "The semantic version of the deployment. You must increment this value for every CloudFormation change"
+    Default: "1.0.0"
+
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            ExpirationInDays: 7
+
+  Topic:
+    Type: AWS::SNS::Topic
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: ImageBuilderPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:SendCommand"
+                  - "ec2:CreateTags"
+                  - "ec2:AttachVolume"
+                  - "ec2:CreateTags"
+                  - "ec2:CreateVolume"
+                  - "ec2:DeleteVolume"
+                  - "ec2:DescribeVolumes"
+                  - "ec2:DetachVolume"
+                Resource: "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder"
+        - "arn:aws:iam::aws:policy/AWSImageBuilderFullAccess"
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+        - "arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref Role
+
+  ImageArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${AWS::StackName}/image-arn"
+      Type: String
+      Value: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:image/${ImageName}/x.x.x"
+
+  Pipeline:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties:
+      Description: !Sub "${Description}"
+      ImageRecipeArn: !Ref Recipe
+      InfrastructureConfigurationArn: !Ref InfrastructureConfiguration
+      Name: !Ref ImageName
+      DistributionConfigurationArn: !Ref DistributionConfiguration
+      Schedule:
+        PipelineExecutionStartCondition: EXPRESSION_MATCH_AND_DEPENDENCY_UPDATES_AVAILABLE
+        ScheduleExpression: "cron(0 0 12 1/1 * ? *)" # 12:00PM UTC / 22:00PM AEST Daily
+
+  InfrastructureConfiguration:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties:
+      Description: !Ref Description
+      TerminateInstanceOnFailure: false
+      InstanceProfileName: !Ref InstanceProfile
+      Name: !Ref ImageName
+      Logging:
+        S3Logs:
+          S3BucketName: !Ref Bucket
+          S3KeyPrefix: !Sub "${ImageName}/Logs"
+      SnsTopicArn: !Ref Topic
+
+  DistributionConfiguration:
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties:
+      Name: !Ref ImageName
+      Description: !Ref Description
+      Distributions:
+        - Region: ap-southeast-2
+          AmiDistributionConfiguration:
+            Name: !Sub "${ImageName}-{{imagebuilder:buildDate}}"
+            Description: !Ref Description
+            AmiTags:
+              Name: !Ref ImageName
+            LaunchPermissionConfiguration:
+              UserIds: [!Sub "${AWS::AccountId}"]
+
+  Recipe:
+    Type: "AWS::ImageBuilder::ImageRecipe"
+    Properties:
+      Name: !Ref ImageName
+      Version: !Ref Version
+      ParentImage: !Ref BaseImageArn
+      Description: !Ref Description
+      Components:
+        - ComponentArn: !Ref EMRCisLevelOneComponent
+      Tags:
+        Name: !Ref ImageName
+
+  EMRCisLevelOneComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: "EMRCisLevelOneComponent"
+      Description: "Retrieves the EMR CIS 1.0 scripts and executs it"
+      Platform: "Linux"
+      Version: !Ref Version
+      Data: |
+        name: HelloWorldTestingLinuxDoc - InlineData
+        description: This is hello world testing doc
+        schemaVersion: 1.0
+
+        phases:
+          - name: build
+            steps:
+              - name: CopyandExecuteCISscripts
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - aws s3 cp s3://${CisScriptS3Uri}/cis_image_creation.sh /tmp/ ; chmod +x /tmp/cis_image_creation.sh ; sudo ./tmp/cis_image_creation.sh
+          - name: validate
+            steps:
+              - name: HelloWorldStep
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - echo "Hello World! Validate."
+          - name: test
+            steps:
+              - name: HelloWorldStep
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - echo "Hello World! Test."
