@@ -19,6 +19,6 @@ Notes:
 EC2 Image Builder is a fully-managed service that makes it easy to build, customize and deploy OS images without writing scripts.
 1. Save cis_image_creation.sh in your user s3 bucket and use as cfn parameter
 2. Update the Phase:Build:CopyandExecuteCISscripts step with the S3 path where you uploaded  the script to
-2. Run CFN template which will create an image pipeline. The image pipeline will be scheduled to run cron - 0 0 12 1/1 * ? * using the ami provided as the parameter. It creates an image recipe that runs the cis_image_creation.sh as a individual component. 
+2. Deploy CFN template which will create an image pipeline. The image pipeline will be scheduled to run cron - 0 0 12 1/1 * ? * using the ami provided as the parameter. It creates an image recipe that runs the cis_image_creation.sh as a individual component. 
 3. Once the CFN is complete - go to image pipeline to run on demand. 
 4. Image will be built and ami provided for to use as a custom EMR AMI
